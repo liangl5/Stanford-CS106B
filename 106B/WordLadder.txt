@@ -1,0 +1,178 @@
+S 106B/X, Word Ladder
+ * This is the core source-code made for
+ * the Word Ladder assignment.
+ *
+ * The code allows a user to input a dictionary of words.
+ * Afterwards, they may input two distinct words of the same size.
+ * If a word ladder connecting those two words exists, it outputs it and prompts the user again.
+ *
+ * Sources: CS106B Lectures slides 5, 6, 7
+ *
+ * author: Yuvraj Baweja and Luke Liang
+ * version: 2019/07/08
+ */
+#include <iostream>
+#include <fstream>
+#include <string>
+#include "lexicon.h"
+#include "set.h"
+#include "simpio.h"
+#include "filelib.h"
+#include "console.h"
+#include "strlib.h"
+#include "queue.h"
+
+using namespace std;
+
+//Functions
+void printHeader();
+void storeDictionary(Lexicon&);
+bool askWord(string&, string&, const Lexicon&);
+void ladder(string, string, Lexicon&);
+bool findNearby(Queue<Stack<string> >&, Lexicon&, const string, const Stack<string>&, bool&);
+
+int main() {
+
+    printHeader();
+
+    Lexicon dictionary;
+    storeDictionary(dictionary);
+
+
+    string word1;
+    string word2;
+    bool continueRunning = askWord(word1, word2, dictionary);
+
+    while (continueRunning) {
+        Lexicon copy = dictionary;
+        ladder(word2, word1, copy);
+        continueRunning = askWord(word1, word2, dictionary);
+    }
+
+    cout << "Have a nice day." << endl;
+    return 0;
+}
+
+// Prints the prompt and beginning of the program
+void printHeader() {
+    cout << "Welcome to CS 106B/X Word Ladder!" << endl <<
+            "Pleas give me two English words, and I will convert the" << endl <<
+            "first into the second by modifying one letter at a time." << endl << endl;
+}
+
+
+// stores a dictionary from a file into a lexicon for further use
+void storeDictionary(Lexicon& dictionary) {
+    ifstream infile;
+    promptUserForFile(infile, "Dictionary file name: ");
+    cout << endl;
+    dictionary.addWordsFromFile(infile);
+}
+
+// asks the user for 2 words
+//returns false if the user inputs nothing (it quits), reprompts the user if it's not a valid word
+//or a valid combination of 2 words, and returns true if it's valid
+bool askWord(string& word1, string& word2, const Lexicon& dictionary) {
+    word1 = trim(toLowerCase(getLine("Word 1 (or Enter to quit): ")));
+    if (word1 == "") {
+        return false;
+    }
+    word2 = trim(toLowerCase(getLine("Word 2 (or Enter to quit): ")));
+    if (word2 == "") {
+        return false;
+
+    } 
+  	else if (word1.size() != word2.size()) {
+        cout << "The two words must be the same length." << endl << endl;
+        return askWord(word1, word2, dictionary);
+
+    } 
+  	else if (word1 == word2) {
+        cout << "The two words must be different." << endl << endl;
+        return askWord(word1, word2, dictionary);
+
+    } 
+  	else if (!dictionary.contains(word1) || !dictionary.contains(word2)) {
+        cout << "The two words must be found in the dictionary." << endl << endl;
+        return askWord(word1, word2, dictionary);
+    }
+    return true;
+}
+
+// creates the word ladder from one word to the other
+void ladder(string word1, string word2, Lexicon& dictionary) {
+    Stack<string> stack;
+    stack.add(word2);
+    Queue<Stack<string> > queue;
+    queue.add(stack);
+  
+  	// if no added move is made then break and say no possibilities
+    bool found = false;
+    bool addedWord = false;
+    bool current = false;
+    while(!found) {
+        addedWord = false;
+        current = false;
+        int size = queue.size();
+        for (int i = 0; i < size; i++) {
+            Stack<string> tmp = queue.dequeue();
+            found = findNearby(queue, dictionary, word1, tmp, addedWord);
+            current = current || addedWord;
+            if (found) {
+                break;
+            }
+        }
+        if (!current) {
+            break;
+        }
+    }
+
+    // if we found it then spew it out, else no word ladder was found
+    if (current) {
+        int size = queue.size();
+        for (int i = 0; i < size-1; i++) {
+            queue.dequeue();
+        }
+        Stack<string> answer = queue.dequeue();
+        Queue<string> tmp;
+        cout << "A ladder from " << word1 << " back to " << word2 << ":" << endl;
+        size = answer.size();
+        for (int i = 0; i < size; i++) {
+            tmp.enqueue(answer.pop());
+        }
+        size = tmp.size();
+        for(int i = 0; i < size; i++) {
+            cout << tmp.dequeue() << " ";
+        }
+    } else {
+        cout << "No word ladder found from "<< word1 <<" back to "<< word2 <<".";
+    }
+    cout << endl << endl;
+}
+
+
+// finds any nearby word of the first entry in the current stack.  If the word is valid and not already in the dictionary,
+// then another stack is created with the new word ontop and thrown into the queue.
+bool findNearby(Queue<Stack<string> >& queue, Lexicon& dictionary, const string goal, const Stack<string>& currentStack, bool& addedWord) {
+    string alphabet = "abcdefghijklmnopqrstuvwxyz";
+    string word = currentStack.peek();
+    string originalString = word;
+    for (int i = 0; i < word.length(); i++) {
+        word = originalString;
+        for (int j = 0; j < 26; j++) {
+            word[i] = alphabet[j];
+            if (dictionary.contains(word)) {
+                Stack<string> tmp = currentStack;
+                dictionary.remove(word);
+                addedWord = true;
+                tmp.add(word);
+                queue.enqueue(tmp);
+                if (word == goal) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+

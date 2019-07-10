@@ -1,0 +1,180 @@
+S 106B/X, NGrams
+ * This is the source code made for the
+ * NGrams assignment.
+ *
+ * First the code prompts the user for a file of their choice.
+ * From there, it employs an algorithim which allows the user
+ * to make their own N-Grams! They simply specify the N and 
+ * amount of words they want to use before they continue.
+ * After creating their sentence, they may continue creating
+ * sentences of the same sort till they decide not to, at which the program exits.
+ * 
+ * Sources: CS106B Lectures slides 5, 6, and 7. Stanford Reference, https://stackoverflow.com/questions/2896600/how-to-replace-all-occurrences-of-a-character-in-string
+ *
+ * author: Yuvraj Baweja and Luke Liang
+ * version: 2019/07/08
+ */
+#include <iostream>
+#include <string>
+#include <fstream>
+#include "console.h"
+#include "map.h"
+#include "filelib.h"
+#include "simpio.h"
+#include "strlib.h"
+#include "filelib.h"
+#include "random.h"
+
+using namespace std;
+
+//Functions
+void printHeader();
+void readFile(Vector<string>&);
+void parseData(Map< Vector<string> ,Vector<string> >&, const Vector<string>&, int&);
+int askForN();
+void makeSentence(const Map< Vector<string> ,Vector<string> >&, int, int);
+int askForNumberWords(int N);
+string getNewWord(int, int, const Vector<string>&, const Map< Vector<string> ,Vector<string> >&);
+void makeFrequencyMap(const Vector<string>&, Map<string, int>&);
+
+
+int main() {
+    printHeader();
+    Map < Vector<string> ,Vector<string> > wordList;
+    Vector<string> inputData;
+    readFile(inputData);
+    int N;
+    parseData(wordList, inputData, N);
+    int numWords = askForNumberWords(N);
+    while(numWords!=0){
+        makeSentence(wordList, numWords, N);
+        numWords = askForNumberWords(N);
+    }
+    cout << "Exiting." << endl;
+    return 0;
+}
+
+//Prints out the Introduction
+void printHeader(){
+    cout << "Welcome to CS 106B/X Random Writer ('N-Grams')!" << endl <<
+            "This program generates random text based on a document." << endl <<
+            "Give me an input file and an 'N' value for groups" << endl <<
+            "of words, and I'll create random text for you." << endl << endl;
+}
+
+//Reads the File into a Vector of words without New Lines Or Tabs
+void readFile(Vector<string>& inputData) {
+    string file = promptUserForFile("Input file name?", "Unable to open that file.  Try again.");
+    string fileData = readEntireFile(file);
+    //Replaces New Lines And Tabs
+    replace(fileData.begin(), fileData.end(), '\n', ' ');
+    replace(fileData.begin(), fileData.end(), '\t', ' ');
+    fileData = toLowerCase(fileData);
+    inputData = stringSplit(fileData, " ");
+    for(int i = 0; i < inputData.size(); i++){
+        if(inputData[i].length() < 1){
+            //inputData.remove(i);
+            inputData.remove(i);
+            i--;
+        }
+    }
+}
+
+//Puts the Data into a Map of prefixes and words.
+void parseData(Map< Vector<string> ,Vector<string> >& wordMap, const Vector<string>& inputData, int& N){  
+  	N = askForN();
+    //Reasonable N so user can ask for words later.
+  	while( N > inputData.size() -1){
+      cout << "Your N is too big! Please try again!" << endl;
+      N = askForN();
+    }
+    for (int i = 0; i < inputData.size() - N + 1; i++) {
+        Vector<string> tmpKey;
+        for (int j = 0; j < N - 1; j++) {
+            tmpKey.add(inputData[i + j]);
+        }
+        wordMap[tmpKey].add(inputData[i+N-1]);
+    }
+}
+
+//Prompts user for N
+int askForN(){
+    int N;
+    N = getInteger("Value of N?", "Illegal integer format. Try again.");
+    while (N < 2){
+        cout << "N must be 2 or greater." << endl;
+        N = getInteger("Value of N?", "Illegal integer format. Try again.");
+    }
+    cout << endl;
+    return N;
+}
+
+//The Main Function which creates the random sentence.
+void makeSentence(const Map< Vector<string> ,Vector<string> >& wordList, int numWords, int N) {
+    //Starting Words
+    Vector<string> sentence = randomKey(wordList);
+    //Rest
+    for (int i = 0; i < numWords - N + 1; i++) {
+        sentence.add(getNewWord(i, i+N-2,sentence,wordList));
+    }
+    string finalSentence = "";
+        finalSentence = finalSentence + "... ";
+    for (int i = 0; i < sentence.size(); i++){
+      finalSentence = finalSentence + sentence[i];
+      finalSentence = finalSentence + " ";
+    }
+    cout << finalSentence << "..." << endl << endl;
+}
+
+//Asks for How many words the sentence will compose
+int askForNumberWords(int N){
+    int num;
+    num = getInteger("# of random words to generate (0 to quit)?", "Illegal integer format. Try again.");
+    while (num < N && num != 0){
+        if(num == 0){
+          return 0;
+        }
+        cout << "Must be at least " << N << " words." << endl << endl;
+        num = getInteger("# of random words to generate (0 to quit)", "Illegal integer format. Try again.");
+    }
+    return num;
+}
+
+//Chooses a Random Word Based on Possible choices.
+string getNewWord(int startIndex, int endIndex, const Vector<string>& sentence, const Map< Vector<string> ,Vector<string> >& wordList){
+    Vector<string> window;
+    for(int i = startIndex; i <= endIndex; i++){
+        window.add(sentence[i]);
+    }
+    Vector<string> possibleWords = wordList.get(window);
+    Map<string, int> frequency;
+
+    makeFrequencyMap(possibleWords, frequency);
+
+    Vector<int> values;
+    Vector<string> keys;
+    int total = 0;
+    //Create Intervals for the Random Function
+    for (string key:frequency) {
+        total+=frequency[key];
+        values.add(total);
+        keys.add(key);
+    }
+		//See where the random function lands.
+    int random = randomInteger(1, total);
+    for (int i = 0; i < values.size(); i++) {
+        if (random <= values[i]) {
+            random = i;
+        }
+    }
+
+    return keys[random];
+}
+
+//Makes the Map of Frequencies
+void makeFrequencyMap(const Vector<string>& possibleWords, Map<string, int>& frequency){
+    for(int i = 0; i < possibleWords.size(); i++){
+        frequency[possibleWords[i]]++;
+    }
+}
+

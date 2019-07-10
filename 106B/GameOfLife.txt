@@ -1,0 +1,446 @@
+S 106B/X, Game of Life
+ * This is the core source-code made for
+ * the Game of Life assignment.
+ *
+ * The code allows a user to input a config file for Conway's Game of Life
+ * Using that file they may tick one gamestate, animate the game, or close it.
+ * After closing they may input another file or leave the program.
+ *
+ * Sources: CS106B Lectures slides 2, 3, and 4.
+ *
+ * author: Yuvraj Baweja and Luke Liang
+ * version: 2019/07/01
+ */
+
+#include <iostream>
+#include <fstream>
+#include <string>
+#include "console.h"
+#include "lifegui.h"
+#include "grid.h"
+#include "filelib.h"
+#include "strlib.h"
+#include "simpio.h"
+
+
+using namespace std;
+
+void printHeader();
+void readFile(Grid<char>&);
+void printGrid(const Grid<char>&);
+void runSimulation(Grid<char>&);
+string promptTAOrQ();
+void runAnimation(Grid<char>&);
+void runTick(Grid<char>&);
+bool runQuit();
+int checkLife(const Grid<char>&, int, int);
+void aliveOrDead(Grid<char>&, int, int, int, char);
+void paintGUI(const Grid<char>&);
+
+
+//Starts GUI and Runs the Program
+int main() {
+  LifeGUI::initialize();
+  printHeader();
+  //Keep Reprompting till they are done.
+  bool notDone = true;
+  Grid<char> lifeBoard;
+  while (notDone){
+    readFile(lifeBoard);
+    printGrid(lifeBoard);
+    runSimulation(lifeBoard);
+    notDone = runQuit();
+  }
+  LifeGUI::shutdown();
+  cout << "Have a nice Life!" << endl;
+
+  return 0;
+}
+
+//Prints the intro body of text.
+void printHeader(){
+  cout << "Welcome to the CS 106B/X Game of Life!" << endl <<
+          "This program simulates the lifecycle of a bacterial colony." << endl <<
+          "Cells (X) live and die by the following rules:"<< endl <<
+          "* A cell with 1 or fewer neighbors dies."<< endl <<
+          "* Locations with 2 neighbors remain stable."<< endl <<
+          "* Locations with 3 neighbors will create life."<< endl <<
+          "* A cell with 4 or more neighbors dies."<< endl << endl;
+}
+
+//Reads a Config File given User Input
+void readFile(Grid<char>& grid) {
+  ifstream infile;
+  promptUserForFile(infile, "Grid input file name?", "Unable to open that file.  Try again.");
+  //Parse the Data
+  string line;
+  getline(infile, line);
+  int rows = stringToInteger(line);
+  getline(infile, line);
+  int cols = stringToInteger(line);
+  grid.resize(rows,cols);
+  LifeGUI::resize(rows, cols);
+
+  for(int r = 0; r < rows; r++) {
+    getline(infile, line); //Gets next line.
+    for (int c = 0; c < cols; c++) {
+      grid[r][c] = line[c]; //Grabs string index and put into the grid
+    }
+  }
+  paintGUI(grid);
+}
+
+//Prints a grid to the console.
+void printGrid(const Grid<char>& grid) {
+  for (int row = 0; row < grid.numRows(); row++) {
+    for (int col = 0; col < grid.numCols(); col++) {
+      cout << grid[row][col];
+    }
+    cout << endl;
+  }
+
+}
+
+//The Core Function which Runs the Simulation
+void runSimulation(Grid<char>& board) {
+  string response = toLowerCase(promptTAOrQ());
+  //Ticks, Animates, or Quits based on input.
+  while (response != "q") {
+    if (response == "a") {
+        runAnimation(board);
+    } else {
+        runTick(board);
+    }
+    response = toLowerCase(promptTAOrQ());
+  }
+}
+
+// Asks if they want to Tick, Animate, or Quit
+string promptTAOrQ(){
+  string answer = getLine("a)nimate, t)ick, q)uit?");
+  //Check for Valid Input
+  while (!equalsIgnoreCase(answer,"q") && !equalsIgnoreCase(answer,"a") &&
+         !equalsIgnoreCase(answer,"t") && !equalsIgnoreCase(answer,"")){
+    cout << "Invalid choice; please try again." << endl;
+    answer = getLine("a)nimate, t)ick, q)uit?");
+  }
+
+  if(answer == ""){
+    answer = "t";
+  }
+  return answer;
+}
+
+//Animates Life using Ticks
+void runAnimation(Grid<char>& board){
+  int frames = getInteger("How many frames?", "Illegal integer format. Try again.");
+  for (int i = 0; i < frames; i++) {
+    clearConsole();
+    runTick(board);
+    pause(100);
+  }
+
+}
+
+//Goes through one tick of life
+void runTick(Grid<char>& board){
+  Grid<char> nextState(board.numRows(),board.numCols());
+  for(int r = 0; r < board.numRows(); r++) {
+    for (int c = 0; c < board.numCols(); c++) {
+      int aliveCells = checkLife(board,r,c);
+      aliveOrDead(nextState, r, c, aliveCells, board[r][c]);
+    }
+  }
+  board = nextState;
+  //Display Output
+  paintGUI(board);
+  printGrid(board);
+}
+
+//Quits and Reprompts If They Want to Play Again
+bool runQuit(){
+  return getYesOrNo("Load another file? (y/n)", "Please type a word that starts with 'Y' or 'N'.");
+}
+
+//Checks how many cells are alive adjacent to the target cell.
+int checkLife(const Grid<char>& board, int row, int col){
+  int cellsAlive = 0;
+  //Gets Adjacent Grids
+  for(int xDif = -1; xDif <= 1; xDif++){
+    for(int yDif = -1; yDif <= 1; yDif++){
+      if(xDif != 0 || yDif != 0){
+        int currentRow = row + xDif;
+        int currentCol = col + yDif;
+        //Wrap around if out of bounds
+        if (currentRow == -1) {
+            currentRow = board.numRows()-1;
+        }
+        else if (currentRow == board.numRows()) {
+           currentRow = 0;
+        }
+        if (currentCol == -1) {
+            currentCol = board.numCols()-1;
+        }
+        else if (currentCol == board.numCols()) {
+            currentCol = 0;
+        }
+        //Check to See If Alive
+        if(board[currentRow][currentCol] == 'X'){
+            cellsAlive++;
+        }
+      }
+    }
+  }
+  return cellsAlive;
+}
+
+//Uses Rules of Life Based on checkLife count in order to determine the cell's state.
+void aliveOrDead(Grid<char>& nextState, int row, int col, int aliveCells, char cell){
+  if(aliveCells < 2 || aliveCells >= 4){
+    nextState[row][col] = '-';
+  }
+  else if(aliveCells == 3){
+    nextState[row][col] = 'X';
+  }
+  else if(aliveCells == 2){
+    nextState[row][col] = cell;
+  }
+}
+
+//Paints the GUI given the Current Grid
+void paintGUI(const Grid<char>& board){
+  LifeGUI::clear();
+  for(int r = 0; r < board.numRows(); r++){
+    for(int c = 0; c < board.numCols(); c++){
+      if(board[r][c] == 'X'){
+        LifeGUI::fillCell(r, c);
+      }
+    }
+  }
+  LifeGUI::repaint();
+}
+
+/*
+ * CS 106B/X, Game of Life
+ * This is the core source-code made for
+ * the Game of Life assignment.
+ *
+ * The code allows a user to input a config file for Conway's Game of Life
+ * Using that file they may tick one gamestate, animate the game, or close it.
+ * After closing they may input another file or leave the program.
+ *
+ * Sources: CS106B Lectures slides 2, 3, and 4.
+ *
+ * author: Yuvraj Baweja and Luke Liang
+ * version: 2019/07/01
+ */
+
+#include <iostream>
+#include <fstream>
+#include <string>
+#include "console.h"
+#include "lifegui.h"
+#include "grid.h"
+#include "filelib.h"
+#include "strlib.h"
+#include "simpio.h"
+
+
+using namespace std;
+
+void printHeader();
+void readFile(Grid<char>&);
+void printGrid(const Grid<char>&);
+void runSimulation(Grid<char>&);
+string promptTAOrQ();
+void runAnimation(Grid<char>&);
+void runTick(Grid<char>&);
+bool runQuit();
+int checkLife(const Grid<char>&, int, int);
+void aliveOrDead(Grid<char>&, int, int, int, char);
+void paintGUI(const Grid<char>&);
+
+
+//Starts GUI and Runs the Program
+int main() {
+  LifeGUI::initialize();
+  printHeader();
+  //Keep Reprompting till they are done.
+  bool notDone = true;
+  Grid<char> lifeBoard;
+  while (notDone){
+    readFile(lifeBoard);
+    printGrid(lifeBoard);
+    runSimulation(lifeBoard);
+    notDone = runQuit();
+  }
+  LifeGUI::shutdown();
+  cout << "Have a nice Life!" << endl;
+
+  return 0;
+}
+
+//Prints the intro body of text.
+void printHeader(){
+  cout << "Welcome to the CS 106B/X Game of Life!" << endl <<
+          "This program simulates the lifecycle of a bacterial colony." << endl <<
+          "Cells (X) live and die by the following rules:"<< endl <<
+          "* A cell with 1 or fewer neighbors dies."<< endl <<
+          "* Locations with 2 neighbors remain stable."<< endl <<
+          "* Locations with 3 neighbors will create life."<< endl <<
+          "* A cell with 4 or more neighbors dies."<< endl << endl;
+}
+
+//Reads a Config File given User Input
+void readFile(Grid<char>& grid) {
+  ifstream infile;
+  promptUserForFile(infile, "Grid input file name?", "Unable to open that file.  Try again.");
+  //Parse the Data
+  string line;
+  getline(infile, line);
+  int rows = stringToInteger(line);
+  getline(infile, line);
+  int cols = stringToInteger(line);
+  grid.resize(rows,cols);
+  LifeGUI::resize(rows, cols);
+
+  for(int r = 0; r < rows; r++) {
+    getline(infile, line); //Gets next line.
+    for (int c = 0; c < cols; c++) {
+      grid[r][c] = line[c]; //Grabs string index and put into the grid
+    }
+  }
+  paintGUI(grid);
+}
+
+//Prints a grid to the console.
+void printGrid(const Grid<char>& grid) {
+  for (int row = 0; row < grid.numRows(); row++) {
+    for (int col = 0; col < grid.numCols(); col++) {
+      cout << grid[row][col];
+    }
+    cout << endl;
+  }
+
+}
+
+//The Core Function which Runs the Simulation
+void runSimulation(Grid<char>& board) {
+  string response = toLowerCase(promptTAOrQ());
+  //Ticks, Animates, or Quits based on input.
+  while (response != "q") {
+    if (response == "a") {
+        runAnimation(board);
+    } else {
+        runTick(board);
+    }
+    response = toLowerCase(promptTAOrQ());
+  }
+}
+
+// Asks if they want to Tick, Animate, or Quit
+string promptTAOrQ(){
+  string answer = getLine("a)nimate, t)ick, q)uit?");
+  //Check for Valid Input
+  while (!equalsIgnoreCase(answer,"q") && !equalsIgnoreCase(answer,"a") &&
+         !equalsIgnoreCase(answer,"t") && !equalsIgnoreCase(answer,"")){
+    cout << "Invalid choice; please try again." << endl;
+    answer = getLine("a)nimate, t)ick, q)uit?");
+  }
+
+  if(answer == ""){
+    answer = "t";
+  }
+  return answer;
+}
+
+//Animates Life using Ticks
+void runAnimation(Grid<char>& board){
+  int frames = getInteger("How many frames?", "Illegal integer format. Try again.");
+  for (int i = 0; i < frames; i++) {
+    clearConsole();
+    runTick(board);
+    pause(100);
+  }
+
+}
+
+//Goes through one tick of life
+void runTick(Grid<char>& board){
+  Grid<char> nextState(board.numRows(),board.numCols());
+  for(int r = 0; r < board.numRows(); r++) {
+    for (int c = 0; c < board.numCols(); c++) {
+      int aliveCells = checkLife(board,r,c);
+      aliveOrDead(nextState, r, c, aliveCells, board[r][c]);
+    }
+  }
+  board = nextState;
+  //Display Output
+  paintGUI(board);
+  printGrid(board);
+}
+
+//Quits and Reprompts If They Want to Play Again
+bool runQuit(){
+  return getYesOrNo("Load another file? (y/n)", "Please type a word that starts with 'Y' or 'N'.");
+}
+
+//Checks how many cells are alive adjacent to the target cell.
+int checkLife(const Grid<char>& board, int row, int col){
+  int cellsAlive = 0;
+  //Gets Adjacent Grids
+  for(int xDif = -1; xDif <= 1; xDif++){
+    for(int yDif = -1; yDif <= 1; yDif++){
+      if(xDif != 0 || yDif != 0){
+        int currentRow = row + xDif;
+        int currentCol = col + yDif;
+        //Wrap around if out of bounds
+        if (currentRow == -1) {
+            currentRow = board.numRows()-1;
+        }
+        else if (currentRow == board.numRows()) {
+           currentRow = 0;
+        }
+        if (currentCol == -1) {
+            currentCol = board.numCols()-1;
+        }
+        else if (currentCol == board.numCols()) {
+            currentCol = 0;
+        }
+        //Check to See If Alive
+        if(board[currentRow][currentCol] == 'X'){
+            cellsAlive++;
+        }
+      }
+    }
+  }
+  return cellsAlive;
+}
+
+//Uses Rules of Life Based on checkLife count in order to determine the cell's state.
+void aliveOrDead(Grid<char>& nextState, int row, int col, int aliveCells, char cell){
+  if(aliveCells < 2 || aliveCells >= 4){
+    nextState[row][col] = '-';
+  }
+  else if(aliveCells == 3){
+    nextState[row][col] = 'X';
+  }
+  else if(aliveCells == 2){
+    nextState[row][col] = cell;
+  }
+}
+
+//Paints the GUI given the Current Grid
+void paintGUI(const Grid<char>& board){
+  LifeGUI::clear();
+  for(int r = 0; r < board.numRows(); r++){
+    for(int c = 0; c < board.numCols(); c++){
+      if(board[r][c] == 'X'){
+        LifeGUI::fillCell(r, c);
+      }
+    }
+  }
+  LifeGUI::repaint();
+}
+
+
