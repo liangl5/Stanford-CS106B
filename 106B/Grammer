@@ -1,0 +1,78 @@
+/*
+ * This program reads in a grammer file and creates sentences randomly
+ * from the grammer rules specified in the file.
+ *
+ * Authors: Luke Liang and Yuvraj Baweja
+ * date: 2019/7/15
+*/
+
+#include "grammarsolver.h"
+#include "strlib.h"
+#include <string>
+#include "map.h"
+#include "vector.h"
+#include "random.h"
+using namespace std;
+
+//function prototypes
+void readFile(Map<string, Vector<string> >&, istream&);
+void generateSentence(Map<string, Vector<string> >&, string, string&);
+
+//generates sentences based off a grammer file
+Vector<string> grammarGenerate(istream& input, string symbol, int times) {
+    Map<string, Vector<string> > map;
+    readFile(map, input);
+
+    Vector<string> v;
+    string sentence;
+
+    //creates multiple sentences and stores them
+    for (int i = 0; i < times; i++) {
+        generateSentence(map, symbol, sentence);
+        v.add(sentence);
+        sentence = "";
+    }
+    return v;
+}
+
+
+//reads the grammer file and stores it in a map
+void readFile(Map<string, Vector<string> >& map, istream& input) {
+    string line;
+    //Grammar Symbol
+    Vector<string> tempVector;
+    //Grammar FollowUp(split by |)
+    Vector<string> tempVector2;
+    while(getline(input, line)) {
+        line = trim(line);
+        tempVector = stringSplit(line, "::=");
+        tempVector2 = stringSplit(tempVector[1], "|");
+        map.put(tempVector[0],tempVector2);
+    }
+}
+
+//the recursion that generates the sentences
+void generateSentence(Map<string, Vector<string> >& map, string symbol, string& sentence) {
+
+    //base case, a normal string
+    if (!map.containsKey(symbol) && symbol.find(" ") == string::npos) {
+        sentence.append(symbol + " ");
+    } else {
+        //randomly grab an element
+        Vector<string> temp = map[symbol];
+        int index = randomInteger(0, temp.size() - 1);
+
+        //if there are spaces that means we have multiple functions
+        if (temp[index].find(" ") != string::npos) {
+            Vector<string> temp2 = stringSplit(temp[index], " ");
+
+            //loop through each of those functions and recurse
+            for (int i = 0; i < temp2.size(); i++) {
+            generateSentence(map, temp2[i], sentence);
+            }
+        } else {
+            generateSentence(map, temp[index], sentence);
+        }
+
+    }
+}
