@@ -1,0 +1,70 @@
+/*
+ * CS 106B/X, Doctors without Orders
+ * This is the core source-code made for
+ * the Doctors without Orders.
+ *
+ * This program allows the user to provide a vector of
+ * doctors and patients, which assigns every patient to at least one doctor.
+ * Afterwards, it returns the schedule that correctly assigns everything, or it returns an empty schedule.
+ *
+ * author: Yuvraj Baweja and Luke Liang
+ * version: 2019/07/21
+ */
+
+#include "DoctorsWithoutOrders.h"
+#include "map.h"
+#include <climits>
+#include <iostream>
+using namespace std;
+
+/* * * * Doctors Without Orders * * * */
+
+/**
+ * Given a list of doctors and a list of patients, determines whether all the patients can
+ * be seen. If so, this function fills in the schedule outparameter with a map from doctors
+ * to the set of patients that doctor would see.
+ *
+ * @param doctors  The list of the doctors available to work.
+ * @param patients The list of the patients that need to be seen.
+ * @param schedule An outparameter that will be filled in with the schedule, should one exist.
+ * @return Whether or not a schedule was found.
+ */
+bool recursionHelper(Vector<Doctor>&, Vector<Patient>&, Map<string, Set<string> >&, int);
+
+bool canAllPatientsBeSeen(Vector<Doctor> &doctors,
+                          Vector<Patient> &patients,
+                          Map<string, Set<string>>& schedule) {
+
+  	//Copies the Array So We can mess with it
+    Vector<Doctor> tempDoctors = doctors;
+    return recursionHelper(tempDoctors, patients, schedule, 0);
+}
+
+bool recursionHelper(Vector<Doctor>& doctors, Vector<Patient>& patients, Map<string, Set<string> >& schedule, int patientIndex){
+    //Base Cases
+    if (patientIndex == patients.size()) {
+      return true;
+    } 
+  	else{
+      // Recursion Case 
+      for (int d = 0; d < doctors.size(); d++) {
+        //Check to See If We Can Put Patient in Any Doctors, If Not Return False
+        if (doctors[d].hoursFree >= patients[patientIndex].hoursNeeded){
+          //Get Rid of the hours now that patient is put in.
+          doctors[d].hoursFree -= patients[patientIndex].hoursNeeded;
+        	if(recursionHelper(doctors, patients, schedule, patientIndex + 1)){
+            //Put Name In Schedule If All Other Lines Of Reasoning Work
+            Set<string> patientList = schedule.get(doctors[d].name);
+            patientList.add(patients[patientIndex].name);
+            schedule.put(doctors[d].name, patientList);
+            return true;
+          }
+          //Add it back to backtrack
+          doctors[d].hoursFree += patients[patientIndex].hoursNeeded;
+        }
+      }
+      //If Finding A Suitable Doctor Fails
+      return false;
+      
+    }
+}
